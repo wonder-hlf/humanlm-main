@@ -4,3 +4,5 @@ annotations/
 __pycache__/
 .DS_Store
 hf_downloads/
+data/
+local_data/
