@@ -92,7 +92,7 @@ def make_sample(bundle: dict, idx: int, context_window: int) -> dict | None:
             },
             {"role": "user", "name": "", "content": user_content},
         ],
-        "generation": {"role": "user", "name": "HUMAN", "content": response},
+        "generation": response,
         "team_no": int(team_no),
         "target": str(target),
         "attempt_no": event.get("attempt_no"),
