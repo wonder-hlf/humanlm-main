@@ -46,6 +46,12 @@ import sys
 print("python:", sys.executable)
 for name in ["torch", "datasets", "pandas", "pyarrow", "transformers", "verl"]:
     print(f"{name}: {'installed' if importlib.util.find_spec(name) else 'missing'}")
+
+try:
+    import verl.trainer.fsdp_sft_trainer
+    print("verl.trainer.fsdp_sft_trainer: importable")
+except Exception as exc:
+    print(f"verl.trainer.fsdp_sft_trainer: unavailable ({exc})")
 PY
 
 echo

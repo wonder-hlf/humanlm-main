@@ -22,6 +22,19 @@ require_path "$MODEL_PATH/config.json"
 require_path "$DATA_DIR/train.parquet"
 require_path "$DATA_DIR/val.parquet"
 
+if ! python3 -c "import verl; import verl.trainer.fsdp_sft_trainer" >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+Missing VERL core trainer.
+
+The verl-recipe-humanlm repository contains HumanLM recipes, but its pinned
+commit does not contain the verl core Python package. Install a compatible
+VERL environment before training, then verify with:
+
+  python3 -c "import verl; import verl.trainer.fsdp_sft_trainer; print(verl.__file__)"
+EOF
+  exit 1
+fi
+
 OUTPUT_DIR="$OUTPUT_ROOT/$EXPERIMENT_NAME"
 CACHE_ROOT="$WORKSPACE_ROOT/hf_cache"
 mkdir -p "$OUTPUT_DIR" "$CACHE_ROOT"

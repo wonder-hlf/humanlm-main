@@ -111,6 +111,14 @@ cd verl-recipe-humanlm
 git checkout 6a7dbd3f143fc0a9af599ed7a458fc503341f846
 ```
 
+This pinned recipe commit does not contain the VERL core trainer package. Before training, verify whether the current Chuangzhi Python environment already provides it:
+
+```bash
+python3 -c "import verl; import verl.trainer.fsdp_sft_trainer; print(verl.__file__)"
+```
+
+If this command fails, stop and preserve the complete error output before installing a different VERL version. The HumanLM recipe may require a specific VERL revision, so do not silently use an arbitrary latest release.
+
 Download the original base model separately:
 
 ```bash
