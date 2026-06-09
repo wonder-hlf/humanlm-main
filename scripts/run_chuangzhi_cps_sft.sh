@@ -60,6 +60,7 @@ export XDG_CACHE_HOME="$CACHE_ROOT"
 export VLLM_DOWNLOAD_DIR="$CACHE_ROOT/hub"
 export VERL_CACHE_DIR="$CACHE_ROOT/verl-cache"
 export VLLM_USE_V1=1
+export WANDB_MODE=disabled
 
 NUM_GPUS=$(awk -F',' '{print NF}' <<< "$GPU_LIST")
 
@@ -85,11 +86,12 @@ python3 -m torch.distributed.run --standalone --nnodes=1 --nproc_per_node="$NUM_
   optim.lr=1e-6 \
   optim.lr_warmup_steps_ratio=0.1 \
   ++optim.lr_scheduler=cosine \
-  +trainer.val_before_train=true \
+  +trainer.val_before_train=false \
   trainer.total_epochs=1 \
+  trainer.logger='["console"]' \
   trainer.project_name=humanlm_cps \
   trainer.experiment_name="$EXPERIMENT_NAME" \
   trainer.default_local_dir="$OUTPUT_DIR" \
-  trainer.save_freq=20 \
-  trainer.test_freq=10 \
+  trainer.save_freq=5 \
+  trainer.test_freq=5 \
   trainer.n_gpus_per_node="$NUM_GPUS"
