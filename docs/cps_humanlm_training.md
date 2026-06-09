@@ -94,19 +94,9 @@ python scripts/prepare_cps_sft_data.py \
   --context-window 40
 ```
 
-## 5. Put Data Where the Training Script Expects It
+## 5. Download Required Training Assets
 
-The pinned training script hardcodes its processed data root. For the first smoke test, use `enron` as a harmless placeholder dataset name:
-
-```bash
-mkdir -p //llm_twin/processed_data/enron_processed_dataset_by_post_dedup/sft/r_no_tag/20p
-cp data/cps_team_sft/sft/r_no_tag/20p/*.parquet \
-  //llm_twin/processed_data/enron_processed_dataset_by_post_dedup/sft/r_no_tag/20p/
-```
-
-If `//llm_twin/processed_data` does not exist on Chuangzhi, use the actual shared data path there and patch `humanlm/train_sft_humanlm.sh` in the training repo.
-
-## 6. Run SFT with Local Qwen3-8B
+The current Chuangzhi workspace has the GitHub source code only. It does not contain the original HumanLM model or its Qwen3-8B base model.
 
 The current Chuangzhi workspace file list does not show `verl-recipe-humanlm`, so clone it first:
 
@@ -121,40 +111,38 @@ cd verl-recipe-humanlm
 git checkout 6a7dbd3f143fc0a9af599ed7a458fc503341f846
 ```
 
-The file list shows this existing model path:
-
-```text
-./qwen_models/qwen/Qwen2.5-7B-Instruct
-```
-
-It does not show Qwen3-8B. If Qwen3-8B is installed elsewhere, use its real absolute path in the command below.
-
-Run a small smoke test:
+Download the original base model separately:
 
 ```bash
-bash humanlm/train_sft_humanlm.sh \
-  "0,1,2,3" \
-  enron \
-  no_thinking \
-  20 \
-  /path/to/local/Qwen3-8B \
-  data.train_batch_size=16 \
-  data.micro_batch_size_per_gpu=1 \
-  trainer.total_epochs=1 \
-  trainer.save_freq=20 \
-  trainer.test_freq=10
+cd /inspire/hdd/project/ai4education/qianhong-p-qianhong
+python -m pip install -U huggingface_hub
+hf download Qwen/Qwen3-8B \
+  --local-dir qwen_models/qwen/Qwen3-8B
 ```
 
-Replace:
+The expected base-model path is:
 
 ```text
-/path/to/local/Qwen3-8B
+/inspire/hdd/project/ai4education/qianhong-p-qianhong/qwen_models/qwen/Qwen3-8B
 ```
 
-with the real Qwen3-8B path on Chuangzhi. If you only want to smoke-test the pipeline before locating Qwen3-8B, you can temporarily use:
+## 6. Run SFT with Qwen3-8B
+
+The local launcher calls the VERL SFT trainer directly. This avoids the pinned upstream script's cluster-specific `//llm_twin` paths and its outdated chat-template path, while training directly from the generated CPS parquet files:
+
+```bash
+cd /inspire/hdd/project/ai4education/qianhong-p-qianhong
+bash humanlm-main/scripts/run_chuangzhi_cps_sft.sh
+```
+
+Default paths used by the launcher:
 
 ```text
-../qwen_models/qwen/Qwen2.5-7B-Instruct
+Training repo: ./verl-recipe-humanlm
+Base model:    ./qwen_models/qwen/Qwen3-8B
+Dataset:       ./humanlm-main/data/cps_team_sft/sft/r_no_tag/20p
+Outputs:       ./humanlm_outputs
+GPUs:          0,1,2,3
 ```
 
 ## 7. Expand After the Smoke Test
@@ -169,14 +157,9 @@ python scripts/prepare_cps_sft_data.py \
   --context-window 40
 ```
 
-Then copy it to:
-
-```text
-//llm_twin/processed_data/enron_processed_dataset_by_post_dedup/sft/r_no_tag/100p/
-```
-
-and run:
+Then run with the full dataset path:
 
 ```bash
-bash humanlm/train_sft_humanlm.sh "0,1,2,3" enron no_thinking 100 /path/to/local/Qwen3-8B
+DATA_DIR=/inspire/hdd/project/ai4education/qianhong-p-qianhong/humanlm-main/data/cps_team_sft/sft/r_no_tag/100p \
+  bash humanlm-main/scripts/run_chuangzhi_cps_sft.sh
 ```
