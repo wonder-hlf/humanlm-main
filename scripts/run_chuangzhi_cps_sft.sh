@@ -83,7 +83,7 @@ python3 -m torch.distributed.run --standalone --nnodes=1 --nproc_per_node="$NUM_
   model.fsdp_config.model_dtype=bfloat16 \
   model.enable_gradient_checkpointing=true \
   optim.lr=1e-6 \
-  ++optim.warmup_steps_ratio=0.1 \
+  optim.lr_warmup_steps_ratio=0.1 \
   ++optim.lr_scheduler=cosine \
   +trainer.val_before_train=true \
   trainer.total_epochs=1 \
