@@ -153,6 +153,44 @@ Outputs:       ./humanlm_outputs
 GPUs:          0,1,2,3
 ```
 
+### Submit on the shared A6000 Slurm cluster
+
+The shared cluster only allows the `A6000:8` partition on `gpu6` and `gpu7`. Submit the smoke training job from the login node:
+
+```bash
+cd ~/workspace/hlf_workspace
+mkdir -p logs
+sbatch humanlm-main/scripts/train_cps_sft_a6000.slurm
+```
+
+Monitor:
+
+```bash
+squeue -u "$USER"
+tail -f logs/hlf-cps-sft-smoke-<JOB_ID>.out
+tail -f logs/hlf-cps-sft-smoke-<JOB_ID>.err
+```
+
+Cancel if needed:
+
+```bash
+scancel <JOB_ID>
+```
+
+For short environment debugging only:
+
+```bash
+srun -p A6000:8 \
+  --ntasks=1 \
+  --cpus-per-task=8 \
+  --mem=64G \
+  --gres=gpu:1 \
+  --time=02:00:00 \
+  --pty bash
+```
+
+Exit the interactive allocation promptly with `Ctrl-D`.
+
 ## 7. Expand After the Smoke Test
 
 Generate a larger dataset by setting `--max-samples-per-team 0`:
