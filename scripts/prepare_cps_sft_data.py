@@ -139,7 +139,13 @@ def main() -> None:
     rng = random.Random(args.seed)
     all_samples: list[dict] = []
 
-    for file_path in sorted(args.input_dir.glob("team_*_bundle_atc21s_full.json")):
+    input_files = sorted(args.input_dir.rglob("team_*_bundle_atc21s_full.json"))
+    if not input_files:
+        raise FileNotFoundError(
+            f"No team bundle JSON files found under: {args.input_dir}"
+        )
+
+    for file_path in input_files:
         bundle = json.loads(file_path.read_text())
         bundle["annotated_corpus"] = bundle.get("annotated_corpus") or bundle.get("corpus", [])
         team_samples = [
