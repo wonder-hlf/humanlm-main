@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-WORKSPACE_ROOT="${WORKSPACE_ROOT:-/inspire/hdd/project/ai4education/qianhong-p-qianhong}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$DEFAULT_WORKSPACE_ROOT}"
 TRAIN_REPO="${TRAIN_REPO:-$WORKSPACE_ROOT/verl-recipe-humanlm}"
 MODEL_PATH="${MODEL_PATH:-$WORKSPACE_ROOT/qwen_models/qwen/Qwen3-8B}"
 DATA_DIR="${DATA_DIR:-$WORKSPACE_ROOT/humanlm-main/data/cps_team_sft/sft/r_no_tag/20p}"
