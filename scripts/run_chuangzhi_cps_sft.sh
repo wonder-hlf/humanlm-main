@@ -5,9 +5,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEFAULT_WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-$DEFAULT_WORKSPACE_ROOT}"
-TRAIN_REPO="${TRAIN_REPO:-$WORKSPACE_ROOT/verl-recipe-humanlm}"
+HUMANLM_REPO="${HUMANLM_REPO:-$WORKSPACE_ROOT/humanlm-main}"
 MODEL_PATH="${MODEL_PATH:-$WORKSPACE_ROOT/qwen_models/qwen/Qwen3-8B}"
-DATA_DIR="${DATA_DIR:-$WORKSPACE_ROOT/humanlm-main/data/cps_team_sft/sft/r_no_tag/20p}"
+DATA_DIR="${DATA_DIR:-$HUMANLM_REPO/data/cps_team_sft/sft/r_no_tag/20p}"
+CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HUMANLM_REPO/user_study/templates/qwen3_multi_role_template_think.jinja}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$WORKSPACE_ROOT/humanlm_outputs}"
 GPU_LIST="${GPU_LIST:-0,1,2,3}"
 EXPERIMENT_NAME="${EXPERIMENT_NAME:-cps_qwen3_8b_sft_smoke}"
@@ -19,8 +20,7 @@ require_path() {
   fi
 }
 
-require_path "$TRAIN_REPO/humanlm/train_sft_humanlm.sh"
-require_path "$TRAIN_REPO/humanlm/chat_templates/qwen3_multi_role_template_think.jinja"
+require_path "$CHAT_TEMPLATE"
 require_path "$MODEL_PATH/config.json"
 require_path "$DATA_DIR/train.parquet"
 require_path "$DATA_DIR/val.parquet"
@@ -42,13 +42,14 @@ OUTPUT_DIR="$OUTPUT_ROOT/$EXPERIMENT_NAME"
 CACHE_ROOT="$WORKSPACE_ROOT/hf_cache"
 mkdir -p "$OUTPUT_DIR" "$CACHE_ROOT"
 
-echo "Training repo: $TRAIN_REPO"
+echo "HumanLM repo:  $HUMANLM_REPO"
+echo "Chat template: $CHAT_TEMPLATE"
 echo "Base model:    $MODEL_PATH"
 echo "Dataset:       $DATA_DIR"
 echo "Output dir:    $OUTPUT_DIR"
 echo "GPUs:          $GPU_LIST"
 
-cd "$TRAIN_REPO"
+cd "$HUMANLM_REPO"
 
 export CUDA_VISIBLE_DEVICES="$GPU_LIST"
 export HF_HOME="$CACHE_ROOT"
@@ -62,13 +63,13 @@ export VLLM_USE_V1=1
 
 NUM_GPUS=$(awk -F',' '{print NF}' <<< "$GPU_LIST")
 
-# Call the VERL trainer directly. The pinned upstream shell script contains
-# cluster-specific //llm_twin paths and an outdated chat-template path.
+# Call the installed VERL trainer directly. The external HumanLM recipe repo is
+# only needed later for latent-state GRPO, not for this response-only SFT.
 python3 -m torch.distributed.run --standalone --nnodes=1 --nproc_per_node="$NUM_GPUS" \
   -m verl.trainer.fsdp_sft_trainer \
   data.train_files="$DATA_DIR/train.parquet" \
   data.val_files="$DATA_DIR/val.parquet" \
-  +data.kwargs.multirole_chat_template_path="$TRAIN_REPO/humanlm/chat_templates/qwen3_multi_role_template_think.jinja" \
+  +data.kwargs.multirole_chat_template_path="$CHAT_TEMPLATE" \
   +data.apply_chat_template_kwargs.enable_thinking=false \
   data.multiturn.enable=false \
   data.max_length=8196 \
