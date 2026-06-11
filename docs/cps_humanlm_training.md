@@ -2,6 +2,70 @@
 
 This repo keeps code only. Do not commit raw or derived human-participant data.
 
+## 0. What Is Being Migrated
+
+The response-only SFT pipeline below is a baseline. The HumanLM-style JUSThink
+pipeline is built separately so that every target human utterance has:
+
+- prefix-only student profile, dialogue/action history, environment state, and
+  observed role capabilities;
+- the six HumanLM state dimensions: belief, goal, value, stance, emotion, and
+  communication, mapped to CPS interpretations;
+- the ground-truth next utterance and the target student's actions before the
+  next human utterance;
+- computable action/alignment proxies and an LLM-judge request schema.
+
+It never uses final `RLG`, final success, or final task-level statistics as
+inputs. The JSON bundles do not reliably expose current cost-view/edit-view
+assignment, so the pipeline records this limitation instead of inventing a
+role.
+
+Build a small HumanLM-style dataset:
+
+```bash
+python scripts/prepare_cps_humanlm_data.py \
+  --input-dir /path/to/team_bundles_atc21s_full \
+  --output-dir data/cps_humanlm/v1/20p \
+  --max-samples-per-team 20 \
+  --context-window 80
+```
+
+Generate six-dimensional states and judge state alignment using DSV4Pro. Keep
+the API key outside the repo and avoid typing it directly into shell history:
+
+```bash
+read -s DSV4PRO_API_KEY
+export DSV4PRO_API_KEY
+export DSV4PRO_BASE_URL='https://provider.example/v1'
+export DSV4PRO_MODEL='provider-specific-dsv4pro-model-id'
+
+python scripts/run_cps_dsv4pro_alignment.py \
+  --input data/cps_humanlm/v1/20p/train.jsonl \
+  --output data/cps_humanlm/v1/20p/train.dsv4pro_alignment.jsonl \
+  --limit 5
+```
+
+The exact base URL and model ID must come from the DSV4Pro provider. The script
+assumes an OpenAI-compatible `/chat/completions` endpoint. Do not commit API
+keys or alignment outputs containing human data.
+
+Compute hard proxy and macro human-trajectory baselines:
+
+```bash
+python scripts/evaluate_cps_state_proxies.py \
+  --input data/cps_humanlm/v1/20p/test.jsonl \
+  --output data/cps_humanlm/v1/20p/test_proxy_summary.json
+
+python scripts/evaluate_cps_macro_metrics.py \
+  --input-dir /path/to/team_bundles_atc21s_full \
+  --output data/cps_humanlm/v1/human_macro_metrics.json
+```
+
+`Qwen3-8B` remains the local base model for response/action synthesis and
+training. DSV4Pro is used for latent-state generation and LLM-judge alignment.
+The current scripts construct and score the state-alignment data; wiring those
+scores into the HumanLM GRPO optimization loop is the next training stage.
+
 ## 1. Build a Small SFT Dataset on Mac
 
 The preparation script merges directly consecutive speech from the same
