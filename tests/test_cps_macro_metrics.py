@@ -41,6 +41,9 @@ class CpsMacroMetricsTest(unittest.TestCase):
         self.assertEqual(row["language_action_alignment"]["mismatch_repair_probability"], 1.0)
         self.assertEqual(row["behavior_rhythm"]["action_counts"]["edit_add"], 2)
         self.assertEqual(row["behavior_rhythm"]["discourse_counts"]["route_instruction"], 1)
+        self.assertEqual(row["behavior_rhythm"]["turn_count"], 4)
+        self.assertEqual(row["behavior_rhythm"]["first_submit_relative_position"], 0.6667)
+        self.assertEqual(row["behavior_rhythm"]["first_match_relative_position"], 1.0)
 
 
 if __name__ == "__main__":

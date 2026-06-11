@@ -76,7 +76,21 @@ python scripts/evaluate_cps_state_proxies.py \
 python scripts/evaluate_cps_macro_metrics.py \
   --input-dir /path/to/team_bundles_atc21s_full \
   --output data/cps_humanlm/v1/human_macro_metrics.json
+
+python analysis/macro_alignment_metrics.py \
+  --human-input-dir /path/to/team_bundles_atc21s_full
 ```
+
+The analysis command writes:
+
+```text
+reports/human_macro_stats.md
+reports/sim_vs_human_macro_alignment.md
+```
+
+After complete simulated trajectories exist, add
+`--sim-input-dir /path/to/simulated_team_bundles` to populate the comparison
+report and behavior-transition Jensen-Shannon divergence.
 
 `Qwen3-8B` is the policy model that generates latent states and response/action.
 DSV4Pro is only the LLM judge. The current scripts construct rollouts and score
