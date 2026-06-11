@@ -30,6 +30,18 @@ RLG, final success, and events after the target point are never model inputs.
 - State-first SFT data: `data/cps_state_first_sft_base_qwen/20p`
 - Training output: `humanlm_outputs/cps_qwen3_8b_base_state_first_sft_smoke`
 
+## One-Command Runner
+
+On the login node, run the complete pipeline with:
+
+```bash
+python humanlm-main/scripts/run_training_two.py
+```
+
+The runner reads the server-only `dsv4pro_config.py` from the workspace root,
+submits GPU stages with `sbatch --wait`, runs the online judge on the login
+node, and verifies the final checkpoint.
+
 On clusters where compute nodes cannot access the internet, run the pipeline in
 two stages:
 

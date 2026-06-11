@@ -133,6 +133,12 @@ def call_chat_completion(
         "temperature": temperature,
         "response_format": {"type": "json_object"},
     }
+    reasoning_effort = os.environ.get("DSV4PRO_REASONING_EFFORT")
+    thinking_enabled = os.environ.get("DSV4PRO_THINKING_ENABLED", "").lower()
+    if reasoning_effort:
+        payload["reasoning_effort"] = reasoning_effort
+    if thinking_enabled in {"1", "true", "yes", "enabled"}:
+        payload["thinking"] = {"type": "enabled"}
     if seed is not None:
         payload["seed"] = seed
     def send(request_payload: dict) -> dict:
@@ -156,6 +162,8 @@ def call_chat_completion(
         fallback = dict(payload)
         fallback.pop("response_format", None)
         fallback.pop("seed", None)
+        fallback.pop("reasoning_effort", None)
+        fallback.pop("thinking", None)
         body = send(fallback)
     return extract_json(body["choices"][0]["message"]["content"])
 
