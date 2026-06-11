@@ -28,8 +28,15 @@ RLG, final success, and events after the target point are never model inputs.
 - State-first SFT data: `data/cps_state_first_sft/20p`
 - Training output: `humanlm_outputs/cps_qwen3_8b_state_first_sft_smoke`
 
-The candidate builder is append-safe. Re-running it skips successful
-candidate/judge pairs and retries failed pairs with a different sampling seed.
+On clusters where compute nodes cannot access the internet, run the pipeline in
+two stages:
+
+1. `generate_cps_state_candidates_a6000.slurm` generates candidates on a GPU
+   compute node without calling the judge.
+2. `judge_and_build_cps_state_first_sft.sh` runs on the internet-connected
+   login node, calls DSV4Pro, selects candidates, and writes SFT parquet files.
+
+Both stages are append-safe. Re-running them skips successful work.
 
 ## Important Limitation
 

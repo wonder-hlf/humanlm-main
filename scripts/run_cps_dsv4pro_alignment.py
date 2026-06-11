@@ -217,6 +217,11 @@ def main() -> None:
         help="Load Qwen locally instead of calling QWEN_BASE_URL.",
     )
     parser.add_argument("--qwen-max-new-tokens", default=1024, type=int)
+    parser.add_argument(
+        "--generate-only",
+        action="store_true",
+        help="Generate Qwen candidates without calling the judge.",
+    )
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument(
         "--append",
@@ -242,7 +247,7 @@ def main() -> None:
             "DSV4PRO_BASE_URL": judge_base_url,
             "DSV4PRO_MODEL": judge_model,
         }.items()
-        if not value
+        if not value and not args.generate_only
     ]
     if not args.qwen_local_model:
         if not qwen_base_url:
@@ -316,14 +321,15 @@ def main() -> None:
                         )
                     )
                     validate_qwen_rollout(qwen_rollout)
-                    alignment = call_chat_completion(
-                        base_url=str(judge_base_url),
-                        api_key=str(judge_api_key),
-                        model=str(judge_model),
-                        messages=judge_messages(sample, qwen_rollout, judge_prompt),
-                        timeout=args.timeout,
-                    )
-                    validate_judge_output(alignment)
+                    if not args.generate_only:
+                        alignment = call_chat_completion(
+                            base_url=str(judge_base_url),
+                            api_key=str(judge_api_key),
+                            model=str(judge_model),
+                            messages=judge_messages(sample, qwen_rollout, judge_prompt),
+                            timeout=args.timeout,
+                        )
+                        validate_judge_output(alignment)
                 except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as caught:
                     error = f"{type(caught).__name__}: {caught}"
                 result.update(
