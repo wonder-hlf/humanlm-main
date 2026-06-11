@@ -37,6 +37,23 @@ class PrepareCpsSftDataTest(unittest.TestCase):
         self.assertNotIn("min_error", prompt_text)
         self.assertNotIn("success", prompt_text)
 
+    def test_incomplete_fragment_is_not_a_training_target(self):
+        bundle = {
+            "team_no": 7,
+            "annotated_corpus": [
+                {
+                    "attempt_no": 1,
+                    "turn_no": 1,
+                    "subject": "A",
+                    "verb": "says",
+                    "object": "go to",
+                    "is_incomplete_fragment": True,
+                }
+            ],
+        }
+
+        self.assertIsNone(make_sample(bundle, 0, 40))
+
 
 if __name__ == "__main__":
     unittest.main()

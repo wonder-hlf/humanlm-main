@@ -11,7 +11,7 @@ DATA_DIR="${DATA_DIR:-$HUMANLM_REPO/data/cps_team_sft/sft/r_no_tag/20p}"
 CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HUMANLM_REPO/user_study/templates/qwen3_multi_role_template_think.jinja}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$WORKSPACE_ROOT/humanlm_outputs}"
 GPU_LIST="${GPU_LIST:-0,1,2,3}"
-EXPERIMENT_NAME="${EXPERIMENT_NAME:-cps_qwen3_8b_sft_merged_smoke}"
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-cps_qwen3_8b_sft_reviewed_smoke}"
 
 require_path() {
   if [ ! -e "$1" ]; then

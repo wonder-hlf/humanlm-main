@@ -39,6 +39,23 @@ the original fragments for comparison. For the fastest review, inspect
 groups. The sampled state-first data is separately written to
 `data/cps_humanlm/v1/20p/`.
 
+The reviewed merge pipeline also:
+
+- removes spaces before punctuation;
+- applies the transcript-free review hashes in
+  `configs/cps_merge_review_flags.json`;
+- marks reviewed/problematic targets with `is_incomplete_fragment=true`;
+- keeps those events in context but excludes them as SFT/state-first targets.
+
+Reviewed smoke SFT uses a fresh default output directory:
+
+```text
+humanlm_outputs/cps_qwen3_8b_sft_reviewed_smoke
+```
+
+This prevents VERL auto-resume from reusing a checkpoint trained on an older
+merge version.
+
 Build a small HumanLM-style dataset:
 
 ```bash

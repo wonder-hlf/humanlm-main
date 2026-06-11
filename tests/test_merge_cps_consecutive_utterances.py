@@ -1,6 +1,10 @@
 import unittest
 
-from scripts.merge_cps_consecutive_utterances import merge_consecutive_utterances
+from scripts.merge_cps_consecutive_utterances import (
+    clean_utterance_text,
+    merge_consecutive_utterances,
+    review_key,
+)
 
 
 def event(subject, verb, text, attempt=1, turn=1):
@@ -23,7 +27,7 @@ class MergeConsecutiveUtterancesTest(unittest.TestCase):
         )
 
         self.assertEqual([row["object"] for row in merged], [
-            "go to mount bern and then mount basel ."
+            "go to mount bern and then mount basel."
         ])
         self.assertEqual(stats["merged_fragments"], 1)
         self.assertEqual(
@@ -52,8 +56,8 @@ class MergeConsecutiveUtterancesTest(unittest.TestCase):
         )
 
         self.assertEqual([row["object"] for row in merged], [
-            "go from mount bern . to mount basel .",
-            "four .",
+            "go from mount bern. to mount basel.",
+            "four.",
         ])
 
     def test_does_not_merge_complete_response_after_interjection(self):
@@ -66,9 +70,9 @@ class MergeConsecutiveUtterancesTest(unittest.TestCase):
         )
 
         self.assertEqual([row["object"] for row in merged], [
-            "go from mount bern .",
-            "four .",
-            "yes that works .",
+            "go from mount bern.",
+            "four.",
+            "yes that works.",
         ])
 
     def test_does_not_merge_complete_sentence_starting_with_then(self):
@@ -90,6 +94,41 @@ class MergeConsecutiveUtterancesTest(unittest.TestCase):
         )
 
         self.assertEqual(len(merged), 2)
+
+    def test_cleans_spaces_before_punctuation(self):
+        self.assertEqual(
+            clean_utterance_text("i think do we connect it , to all places ?"),
+            "i think do we connect it, to all places?",
+        )
+
+    def test_marks_incomplete_fragment_for_training_exclusion(self):
+        merged, stats = merge_consecutive_utterances(
+            [event("A", "says", "we should go to")]
+        )
+
+        self.assertTrue(merged[0]["is_incomplete_fragment"])
+        self.assertEqual(stats["incomplete_fragments"], 1)
+
+    def test_human_review_hash_marks_only_reviewed_merge(self):
+        events = [
+            event("A", "says", "we should"),
+            event("A", "says", "go."),
+        ]
+        expected_parts = ["we should", "go."]
+        flag = review_key(
+            7,
+            {
+                "attempt_no": 1,
+                "turn_no": 1,
+                "subject": "A",
+                "merged_utterance_parts": expected_parts,
+            },
+        )
+
+        merged, _ = merge_consecutive_utterances(events, team_no=7, review_flags={flag})
+
+        self.assertEqual(merged[0]["human_review_status"], "needs_review")
+        self.assertTrue(merged[0]["is_incomplete_fragment"])
 
 
 if __name__ == "__main__":

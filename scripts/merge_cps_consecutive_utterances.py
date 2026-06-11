@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
+import re
 from pathlib import Path
 
 
@@ -44,6 +46,18 @@ INCOMPLETE_ENDERS = {
     "to",
     "with",
 }
+FRAGMENT_ENDERS = INCOMPLETE_ENDERS | {
+    "a",
+    "do",
+    "go",
+    "just",
+    "so",
+    "the",
+    "uh",
+    "um",
+}
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_REVIEW_FLAGS = ROOT / "configs/cps_merge_review_flags.json"
 
 
 def is_speech(event: dict) -> bool:
@@ -52,6 +66,40 @@ def is_speech(event: dict) -> bool:
 
 def join_utterances(parts: list[str]) -> str:
     return " ".join(part.strip() for part in parts if part.strip())
+
+
+def clean_utterance_text(text: str) -> str:
+    text = re.sub(r"\s+([,.;:!?])", r"\1", text.strip())
+    return re.sub(r"\s{2,}", " ", text)
+
+
+def is_likely_incomplete_fragment(text: str) -> bool:
+    stripped = clean_utterance_text(text).lower()
+    words = re.findall(r"[a-z0-9']+", stripped)
+    if not words:
+        return True
+    return words[-1] in FRAGMENT_ENDERS
+
+
+def review_key(team_no: object, event: dict) -> str:
+    payload = json.dumps(
+        {
+            "team_no": team_no,
+            "attempt_no": event.get("attempt_no"),
+            "turn_no": event.get("turn_no"),
+            "subject": event.get("subject"),
+            "parts": event.get("merged_utterance_parts", [event.get("object", "")]),
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def load_review_flags(path: Path = DEFAULT_REVIEW_FLAGS) -> set[str]:
+    if not path.exists():
+        return set()
+    return set(json.loads(path.read_text(encoding="utf-8"))["needs_review"])
 
 
 def is_continuation_fragment(text: str) -> bool:
@@ -71,7 +119,11 @@ def is_incomplete_utterance(text: str) -> bool:
     )
 
 
-def merge_consecutive_utterances(events: list[dict]) -> tuple[list[dict], dict[str, int]]:
+def merge_consecutive_utterances(
+    events: list[dict],
+    team_no: object = None,
+    review_flags: set[str] | None = None,
+) -> tuple[list[dict], dict[str, int]]:
     """Merge consecutive speech and short continuation fragments."""
     merged_events: list[dict] = []
     merged_fragments = 0
@@ -125,18 +177,38 @@ def merge_consecutive_utterances(events: list[dict]) -> tuple[list[dict], dict[s
             merged_events.append(event)
             last_speech_index[str(speaker)] = len(merged_events) - 1
 
+    incomplete_fragments = 0
+    flags = load_review_flags() if review_flags is None else review_flags
+    for event in merged_events:
+        if is_speech(event) and event.get("subject") in HUMAN_PARTICIPANTS:
+            event["object"] = clean_utterance_text(str(event.get("object", "")))
+            human_review_flag = review_key(team_no, event) in flags
+            event["human_review_status"] = (
+                "needs_review" if human_review_flag else "not_flagged"
+            )
+            event["is_incomplete_fragment"] = (
+                human_review_flag
+                or is_likely_incomplete_fragment(str(event.get("object", "")))
+            )
+            incomplete_fragments += int(event["is_incomplete_fragment"])
+
     return merged_events, {
         "input_events": len(events),
         "output_events": len(merged_events),
         "merged_groups": merged_groups,
         "merged_fragments": merged_fragments,
+        "incomplete_fragments": incomplete_fragments,
     }
 
 
-def merge_bundle(bundle: dict) -> tuple[dict, dict[str, int]]:
+def merge_bundle(bundle: dict, review_flags: set[str] | None = None) -> tuple[dict, dict[str, int]]:
     merged_bundle = copy.deepcopy(bundle)
     source_key = "annotated_corpus" if bundle.get("annotated_corpus") else "corpus"
-    merged, stats = merge_consecutive_utterances(bundle.get(source_key, []))
+    merged, stats = merge_consecutive_utterances(
+        bundle.get(source_key, []),
+        team_no=bundle.get("team_no"),
+        review_flags=review_flags,
+    )
     merged_bundle[source_key] = merged
     return merged_bundle, stats
 
@@ -155,11 +227,21 @@ def main() -> None:
         )
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    totals = {"input_events": 0, "output_events": 0, "merged_groups": 0, "merged_fragments": 0}
+    review_flags = load_review_flags()
+    totals = {
+        "input_events": 0,
+        "output_events": 0,
+        "merged_groups": 0,
+        "merged_fragments": 0,
+        "incomplete_fragments": 0,
+    }
     audit_rows = []
 
     for input_path in input_files:
-        merged_bundle, stats = merge_bundle(json.loads(input_path.read_text()))
+        merged_bundle, stats = merge_bundle(
+            json.loads(input_path.read_text()),
+            review_flags=review_flags,
+        )
         output_path = args.output_dir / input_path.name
         output_path.write_text(
             json.dumps(merged_bundle, ensure_ascii=False, indent=2),
@@ -174,6 +256,8 @@ def main() -> None:
                 "subject": event.get("subject"),
                 "merged_utterance_parts": event.get("merged_utterance_parts"),
                 "merged_utterance": event.get("object"),
+                "is_incomplete_fragment": event.get("is_incomplete_fragment", False),
+                "training_eligible": not event.get("is_incomplete_fragment", False),
             }
             for event in merged_bundle[source_key]
             if event.get("merged_utterance_count", 1) > 1
@@ -188,7 +272,8 @@ def main() -> None:
     print(
         f"Total: {totals['merged_groups']} groups, "
         f"{totals['merged_fragments']} fragments merged, "
-        f"{totals['input_events']} -> {totals['output_events']} events"
+        f"{totals['input_events']} -> {totals['output_events']} events, "
+        f"{totals['incomplete_fragments']} incomplete speech events"
     )
     if args.audit_output:
         args.audit_output.parent.mkdir(parents=True, exist_ok=True)

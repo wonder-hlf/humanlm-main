@@ -69,6 +69,12 @@ class PrepareCpsHumanlmDataTest(unittest.TestCase):
         self.assertFalse(sample["qwen_rollout_request"]["ground_truth_visible_to_qwen"])
         self.assertEqual(sample["judge_request"]["judge_role"], "score_qwen_rollout_only")
 
+    def test_incomplete_fragment_is_not_a_state_first_target(self):
+        target = event("A", "says", "go to")
+        target["is_incomplete_fragment"] = True
+
+        self.assertIsNone(make_sample({"team_no": 9}, [target], 0, 80))
+
 
 if __name__ == "__main__":
     unittest.main()

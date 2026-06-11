@@ -59,6 +59,8 @@ def make_sample(bundle: dict, events: list[dict], idx: int, context_window: int)
     participant = target_event.get("subject")
     if participant not in HUMAN_PARTICIPANTS or target_event.get("verb") != "says":
         return None
+    if target_event.get("is_incomplete_fragment"):
+        return None
     utterance = str(target_event.get("object", "")).strip()
     if not utterance:
         return None
@@ -156,6 +158,7 @@ def main() -> None:
     rng = random.Random(args.seed)
     samples = []
     total_merged_fragments = 0
+    total_excluded_incomplete_targets = 0
     input_files = sorted(args.input_dir.rglob("team_*_bundle_atc21s_full.json"))
     if not input_files:
         raise FileNotFoundError(f"No team bundles found under {args.input_dir}")
@@ -163,8 +166,17 @@ def main() -> None:
     for path in input_files:
         bundle = json.loads(path.read_text())
         annotated = attach_submit_results(bundle["annotated_corpus"], bundle["corpus"])
-        events, stats = merge_consecutive_utterances(annotated)
+        events, stats = merge_consecutive_utterances(
+            annotated,
+            team_no=bundle.get("team_no"),
+        )
         total_merged_fragments += stats["merged_fragments"]
+        total_excluded_incomplete_targets += sum(
+            event.get("subject") in HUMAN_PARTICIPANTS
+            and event.get("verb") == "says"
+            and event.get("is_incomplete_fragment", False)
+            for event in events
+        )
         team_samples = [
             sample
             for idx in range(len(events))
@@ -189,6 +201,7 @@ def main() -> None:
         "max_samples_per_team": args.max_samples_per_team,
         "total_samples": len(samples),
         "merged_fragments": total_merged_fragments,
+        "excluded_incomplete_targets": total_excluded_incomplete_targets,
         "split_teams": split_teams,
         "splits": {split: len(rows) for split, rows in splits.items()},
         "future_information_policy": (
