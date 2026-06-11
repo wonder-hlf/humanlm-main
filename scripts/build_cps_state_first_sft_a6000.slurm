@@ -16,7 +16,7 @@ WORKSPACE_ROOT="${WORKSPACE_ROOT:-$HOME/workspace/hlf_workspace}"
 ENV_DIR="$WORKSPACE_ROOT/.conda"
 export PATH="$ENV_DIR/bin:$PATH"
 export HUMANLM_REPO="$WORKSPACE_ROOT/humanlm-main"
-export QWEN_LOCAL_MODEL="$WORKSPACE_ROOT/humanlm_outputs/cps_qwen3_8b_sft_reviewed_smoke/merged_hf"
+export QWEN_LOCAL_MODEL="$WORKSPACE_ROOT/qwen_models/qwen/Qwen3-8B"
 export CANDIDATES_PER_SAMPLE="${CANDIDATES_PER_SAMPLE:-3}"
 export MINIMUM_SCORE="${MINIMUM_SCORE:-0.5}"
 

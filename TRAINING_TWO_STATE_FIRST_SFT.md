@@ -1,7 +1,8 @@
 # Training Two: State-First SFT
 
-Training two is a small-sample, non-RL experiment. It starts from the merged
-response-only SFT model produced by training one.
+Training two is a small-sample, non-RL experiment. Both latent-state candidate
+generation and state-first SFT start from the original Qwen3-8B base model.
+Training one's response-only SFT model is not used.
 
 ## Data Flow
 
@@ -24,9 +25,10 @@ RLG, final success, and events after the target point are never model inputs.
 ## Main Artifacts
 
 - Leakage-safe source data: `data/cps_humanlm/v1/20p`
-- Candidate and judge records: `outputs/cps_state_first_candidates/20p`
-- State-first SFT data: `data/cps_state_first_sft/20p`
-- Training output: `humanlm_outputs/cps_qwen3_8b_state_first_sft_smoke`
+- Raw Qwen candidates: `outputs/cps_state_first_raw_candidates_base_qwen/20p`
+- Candidate and judge records: `outputs/cps_state_first_candidates_base_qwen/20p`
+- State-first SFT data: `data/cps_state_first_sft_base_qwen/20p`
+- Training output: `humanlm_outputs/cps_qwen3_8b_base_state_first_sft_smoke`
 
 On clusters where compute nodes cannot access the internet, run the pipeline in
 two stages:

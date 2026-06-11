@@ -6,12 +6,12 @@ DEFAULT_WORKSPACE_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-$DEFAULT_WORKSPACE_ROOT}"
 HUMANLM_REPO="${HUMANLM_REPO:-$WORKSPACE_ROOT/humanlm-main}"
-MODEL_PATH="${MODEL_PATH:-$WORKSPACE_ROOT/humanlm_outputs/cps_qwen3_8b_sft_reviewed_smoke/merged_hf}"
-DATA_DIR="${DATA_DIR:-$HUMANLM_REPO/data/cps_state_first_sft/20p}"
+MODEL_PATH="${MODEL_PATH:-$WORKSPACE_ROOT/qwen_models/qwen/Qwen3-8B}"
+DATA_DIR="${DATA_DIR:-$HUMANLM_REPO/data/cps_state_first_sft_base_qwen/20p}"
 CHAT_TEMPLATE="${CHAT_TEMPLATE:-$HUMANLM_REPO/user_study/templates/qwen3_multi_role_template_think.jinja}"
 OUTPUT_ROOT="${OUTPUT_ROOT:-$WORKSPACE_ROOT/humanlm_outputs}"
 GPU_LIST="${GPU_LIST:-0,1,2,3}"
-EXPERIMENT_NAME="${EXPERIMENT_NAME:-cps_qwen3_8b_state_first_sft_smoke}"
+EXPERIMENT_NAME="${EXPERIMENT_NAME:-cps_qwen3_8b_base_state_first_sft_smoke}"
 
 for path in "$MODEL_PATH/config.json" "$DATA_DIR/train.parquet" "$DATA_DIR/val.parquet" "$CHAT_TEMPLATE"; do
   if [ ! -e "$path" ]; then
@@ -24,7 +24,7 @@ OUTPUT_DIR="$OUTPUT_ROOT/$EXPERIMENT_NAME"
 CACHE_ROOT="$WORKSPACE_ROOT/hf_cache"
 mkdir -p "$OUTPUT_DIR" "$CACHE_ROOT"
 
-echo "Training-two model: $MODEL_PATH"
+echo "Training-two base model: $MODEL_PATH"
 echo "State-first data:   $DATA_DIR"
 echo "Output dir:         $OUTPUT_DIR"
 
