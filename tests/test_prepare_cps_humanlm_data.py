@@ -66,6 +66,8 @@ class PrepareCpsHumanlmDataTest(unittest.TestCase):
             {"belief", "goal", "value", "stance", "emotion", "communication"},
         )
         self.assertEqual(sample["role_state"]["declared_role"], "not_available_in_bundle")
+        self.assertFalse(sample["qwen_rollout_request"]["ground_truth_visible_to_qwen"])
+        self.assertEqual(sample["judge_request"]["judge_role"], "score_qwen_rollout_only")
 
 
 if __name__ == "__main__":

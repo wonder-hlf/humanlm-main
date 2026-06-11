@@ -30,10 +30,25 @@ python scripts/prepare_cps_humanlm_data.py \
   --context-window 80
 ```
 
-Generate six-dimensional states and judge state alignment using DSV4Pro. Keep
-the API key outside the repo and avoid typing it directly into shell history:
+Run Qwen3-8B as the HumanLM policy model. Qwen generates both the six latent
+states and the next utterance/optional action:
 
 ```bash
+vllm serve /path/to/Qwen3-8B \
+  --served-model-name Qwen3-8B \
+  --dtype auto \
+  --host 127.0.0.1 \
+  --port 8000
+```
+
+Then configure Qwen's OpenAI-compatible endpoint and DSV4Pro as judge only.
+Keep the judge API key outside the repo and avoid typing it directly into shell
+history:
+
+```bash
+export QWEN_BASE_URL='http://127.0.0.1:8000/v1'
+export QWEN_MODEL='Qwen3-8B'
+
 read -s DSV4PRO_API_KEY
 export DSV4PRO_API_KEY
 export DSV4PRO_BASE_URL='https://provider.example/v1'
@@ -45,9 +60,11 @@ python scripts/run_cps_dsv4pro_alignment.py \
   --limit 5
 ```
 
-The exact base URL and model ID must come from the DSV4Pro provider. The script
-assumes an OpenAI-compatible `/chat/completions` endpoint. Do not commit API
-keys or alignment outputs containing human data.
+Both endpoints must provide an OpenAI-compatible `/chat/completions` API. The
+script first asks Qwen for `latent_states + utterance + optional_action`, then
+passes that rollout and the human ground truth to DSV4Pro for scoring. DSV4Pro
+is never asked to generate latent states or a response. Do not commit API keys
+or alignment outputs containing human data.
 
 Compute hard proxy and macro human-trajectory baselines:
 
@@ -61,10 +78,38 @@ python scripts/evaluate_cps_macro_metrics.py \
   --output data/cps_humanlm/v1/human_macro_metrics.json
 ```
 
-`Qwen3-8B` remains the local base model for response/action synthesis and
-training. DSV4Pro is used for latent-state generation and LLM-judge alignment.
-The current scripts construct and score the state-alignment data; wiring those
-scores into the HumanLM GRPO optimization loop is the next training stage.
+`Qwen3-8B` is the policy model that generates latent states and response/action.
+DSV4Pro is only the LLM judge. The current scripts construct rollouts and score
+state alignment; wiring those scores into the HumanLM GRPO optimization loop is
+the next training stage.
+
+### Small-batch implementation route
+
+Use this order before any full-data run:
+
+1. Build `20 samples/team` with team-held-out train/validation/test splits.
+2. Start the untrained or SFT-initialized Qwen3-8B policy through vLLM.
+3. Ask Qwen to generate one structured rollout per sample:
+   `six latent states + utterance + optional action`.
+4. Validate the rollout schema. Invalid or incomplete Qwen output is rejected
+   before it reaches the judge.
+5. Ask DSV4Pro only to score Qwen's latent states against the human utterance
+   and nearby action. Save per-dimension score, rationale, and overall score.
+6. Inspect a very small judge batch first, such as five samples. Check for
+   reward hacking, future-information assumptions, and inconsistent rationales.
+7. Combine the DSV4Pro state-alignment score with computable action proxies.
+8. Feed the combined reward into the HumanLM VERL/GRPO recipe to update
+   Qwen3-8B. Start with the small train split and short rollouts.
+9. Compare the trained policy against human held-out trajectories using task
+   performance, behavior rhythm, language-action alignment, discourse
+   distribution, and transition structure.
+10. Expand to all samples only after the small-batch reward and rollout quality
+    are stable.
+
+Stages 1-6 and the human macro evaluation are implemented in this repository.
+Stage 8, the JUSThink-specific reward function and GRPO launcher, is not yet
+implemented. The existing `run_chuangzhi_cps_sft.sh` remains a response-only
+SFT baseline and must not be described as HumanLM state-alignment training.
 
 ## 1. Build a Small SFT Dataset on Mac
 

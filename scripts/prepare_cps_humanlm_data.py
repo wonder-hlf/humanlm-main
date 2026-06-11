@@ -84,6 +84,21 @@ def make_sample(bundle: dict, events: list[dict], idx: int, context_window: int)
             "actions_before_next_human_utterance": actions,
         },
         "computable_state_proxies": build_proxy_labels(actions),
+        "qwen_rollout_request": {
+            "input_fields": [
+                "student_profile",
+                "role_state",
+                "environment_state",
+                "dialogue_and_action_history",
+                "state_dimensions",
+            ],
+            "required_output": {
+                "latent_states": list(CPS_STATE_DIMENSIONS),
+                "utterance": "string",
+                "optional_action": "null or task action object",
+            },
+            "ground_truth_visible_to_qwen": False,
+        },
         "judge_request": {
             "context_fields": [
                 "student_profile",
@@ -96,9 +111,13 @@ def make_sample(bundle: dict, events: list[dict], idx: int, context_window: int)
                 "ground_truth.actions_before_next_human_utterance",
             ],
             "dimensions": CPS_STATE_DIMENSIONS,
+            "judge_role": "score_qwen_rollout_only",
             "required_output": {
-                dimension["cps_name"]: {"score": "0-1", "rationale": "string"}
-                for dimension in CPS_STATE_DIMENSIONS.values()
+                "dimension_scores": {
+                    dimension["cps_name"]: {"score": "0-1", "rationale": "string"}
+                    for dimension in CPS_STATE_DIMENSIONS.values()
+                },
+                "overall_state_alignment": "0-1",
             },
         },
     }

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate CPS latent states and judge alignment with a configurable DSV4Pro API."""
+"""Run Qwen HumanLM rollouts and judge their state alignment with DSV4Pro."""
 
 from __future__ import annotations
 
@@ -10,6 +10,10 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+
+STATE_KEYS = {"belief", "goal", "value", "stance", "emotion", "communication"}
+ACTION_TYPES = {"edit_add", "edit_remove", "edit_load", "check", "submit", "press"}
 
 
 def load_jsonl(path: Path) -> list[dict]:
@@ -24,6 +28,21 @@ def extract_json(text: str) -> dict:
     if start < 0 or end < start:
         raise ValueError(f"Model did not return a JSON object: {text[:200]}")
     return json.loads(text[start : end + 1])
+
+
+def validate_qwen_rollout(rollout: dict) -> None:
+    states = rollout.get("latent_states")
+    if not isinstance(states, dict) or set(states) != STATE_KEYS:
+        raise ValueError(f"Qwen rollout must contain exactly six latent states: {STATE_KEYS}")
+    if not all(isinstance(states[key], str) and states[key].strip() for key in STATE_KEYS):
+        raise ValueError("Every Qwen latent state must be a non-empty string.")
+    if not isinstance(rollout.get("utterance"), str) or not rollout["utterance"].strip():
+        raise ValueError("Qwen rollout utterance must be a non-empty string.")
+    action = rollout.get("optional_action")
+    if action is not None and (
+        not isinstance(action, dict) or action.get("type") not in ACTION_TYPES
+    ):
+        raise ValueError(f"Qwen optional_action must be null or one of: {ACTION_TYPES}")
 
 
 def call_chat_completion(
@@ -69,36 +88,43 @@ def context_payload(sample: dict) -> dict:
     }
 
 
-def latent_messages(sample: dict) -> list[dict]:
+def qwen_rollout_messages(sample: dict) -> list[dict]:
     return [
         {
             "role": "system",
             "content": (
-                "Infer the target student's current latent CPS state using only the "
-                "provided prefix context. Never use or predict final task outcomes. "
-                "Return JSON with exactly six keys: belief, goal, value, stance, "
-                "emotion, communication. Each value must be a concise string."
+                "You are the target student in a JUSThink collaborative task. Using "
+                "only the provided prefix context, first infer your six latent CPS "
+                "states, then produce your next utterance and optional task action. "
+                "Never use or predict final task outcomes. Return JSON with this "
+                "schema: {\"latent_states\":{\"belief\":\"...\",\"goal\":\"...\","
+                "\"value\":\"...\",\"stance\":\"...\",\"emotion\":\"...\","
+                "\"communication\":\"...\"},\"utterance\":\"...\","
+                "\"optional_action\":null or {\"type\":\"edit_add|edit_remove|"
+                "edit_load|check|submit|press\",\"object\":\"...\"}}."
             ),
         },
         {"role": "user", "content": json.dumps(context_payload(sample), ensure_ascii=False)},
     ]
 
 
-def judge_messages(sample: dict, latent_states: dict) -> list[dict]:
+def judge_messages(sample: dict, qwen_rollout: dict) -> list[dict]:
     payload = context_payload(sample)
     payload["ground_truth"] = sample["ground_truth"]
-    payload["generated_latent_states"] = latent_states
+    payload["qwen_rollout"] = qwen_rollout
     payload["computable_state_proxies"] = sample["computable_state_proxies"]
     return [
         {
             "role": "system",
             "content": (
-                "Judge how well each generated latent state aligns with the human's "
-                "ground-truth next utterance and nearby action. Return JSON keyed by "
-                "task_understanding, strategy_goal, collaboration_value, "
-                "interaction_stance, error_repair_state, communication_style. Each "
-                "value must contain score (number from 0 to 1) and rationale (string). "
-                "Do not reward claims that rely on future information."
+                "You are only a judge. Do not generate or rewrite latent states, "
+                "utterances, or actions. Judge how well Qwen's generated latent states "
+                "align with the human's ground-truth next utterance and nearby action. "
+                "Return JSON with dimension_scores keyed by task_understanding, "
+                "strategy_goal, collaboration_value, interaction_stance, "
+                "error_repair_state, communication_style; each value must contain "
+                "score (0 to 1) and rationale. Also return overall_state_alignment "
+                "(0 to 1). Do not reward claims that rely on future information."
             ),
         },
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
@@ -114,15 +140,20 @@ def main() -> None:
     parser.add_argument("--sleep-seconds", default=0.5, type=float)
     args = parser.parse_args()
 
-    api_key = os.environ.get("DSV4PRO_API_KEY")
-    base_url = os.environ.get("DSV4PRO_BASE_URL")
-    model = os.environ.get("DSV4PRO_MODEL")
+    qwen_api_key = os.environ.get("QWEN_API_KEY", "EMPTY")
+    qwen_base_url = os.environ.get("QWEN_BASE_URL")
+    qwen_model = os.environ.get("QWEN_MODEL")
+    judge_api_key = os.environ.get("DSV4PRO_API_KEY")
+    judge_base_url = os.environ.get("DSV4PRO_BASE_URL")
+    judge_model = os.environ.get("DSV4PRO_MODEL")
     missing = [
         name
         for name, value in {
-            "DSV4PRO_API_KEY": api_key,
-            "DSV4PRO_BASE_URL": base_url,
-            "DSV4PRO_MODEL": model,
+            "QWEN_BASE_URL": qwen_base_url,
+            "QWEN_MODEL": qwen_model,
+            "DSV4PRO_API_KEY": judge_api_key,
+            "DSV4PRO_BASE_URL": judge_base_url,
+            "DSV4PRO_MODEL": judge_model,
         }.items()
         if not value
     ]
@@ -137,25 +168,26 @@ def main() -> None:
     with args.output.open("w", encoding="utf-8") as output:
         for index, sample in enumerate(rows, start=1):
             try:
-                latent_states = call_chat_completion(
-                    base_url=str(base_url),
-                    api_key=str(api_key),
-                    model=str(model),
-                    messages=latent_messages(sample),
+                qwen_rollout = call_chat_completion(
+                    base_url=str(qwen_base_url),
+                    api_key=str(qwen_api_key),
+                    model=str(qwen_model),
+                    messages=qwen_rollout_messages(sample),
                     timeout=args.timeout,
                 )
+                validate_qwen_rollout(qwen_rollout)
                 alignment = call_chat_completion(
-                    base_url=str(base_url),
-                    api_key=str(api_key),
-                    model=str(model),
-                    messages=judge_messages(sample, latent_states),
+                    base_url=str(judge_base_url),
+                    api_key=str(judge_api_key),
+                    model=str(judge_model),
+                    messages=judge_messages(sample, qwen_rollout),
                     timeout=args.timeout,
                 )
                 result = {
                     "team_no": sample["team_no"],
                     "participant": sample["participant"],
                     "source_index": sample["source_index"],
-                    "latent_states": latent_states,
+                    "qwen_rollout": qwen_rollout,
                     "state_alignment": alignment,
                 }
             except (urllib.error.URLError, TimeoutError, ValueError, KeyError) as error:
