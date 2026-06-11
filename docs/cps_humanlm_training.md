@@ -4,6 +4,13 @@ This repo keeps code only. Do not commit raw or derived human-participant data.
 
 ## 1. Build a Small SFT Dataset on Mac
 
+The preparation script merges directly consecutive speech from the same
+participant before sampling. Within the same logged `attempt_no` and `turn_no`,
+it also joins short continuation fragments beginning with words such as `to`,
+`of`, `and`, or `because`, even after a brief teammate interjection. This
+handles fragments such as `to mount basel .` without combining every utterance
+from a long task turn.
+
 ```bash
 cd /Users/wonder-hlf/Desktop/humanlm-main
 python scripts/prepare_cps_sft_data.py \
@@ -12,6 +19,17 @@ python scripts/prepare_cps_sft_data.py \
   --max-samples-per-team 20 \
   --context-window 40
 ```
+
+To inspect merged raw bundles separately:
+
+```bash
+python scripts/merge_cps_consecutive_utterances.py \
+  --input-dir /Users/wonder-hlf/Desktop/CPS/score/team_bundles_atc21s_full \
+  --output-dir local_data/team_bundles_atc21s_merged
+```
+
+Both `data/` and `local_data/` are ignored by Git because they contain human
+participant data.
 
 Output:
 

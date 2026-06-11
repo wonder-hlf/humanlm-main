@@ -10,6 +10,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from merge_cps_consecutive_utterances import merge_consecutive_utterances
+
 
 SYSTEM_PROMPT = """You are simulating a real human participant in a collaborative problem-solving task.
 
@@ -133,6 +135,11 @@ def main() -> None:
     parser.add_argument("--output-dir", default=Path("data/cps_team_sft"), type=Path)
     parser.add_argument("--context-window", default=40, type=int)
     parser.add_argument("--max-samples-per-team", default=20, type=int)
+    parser.add_argument(
+        "--keep-utterance-fragments",
+        action="store_true",
+        help="Do not merge consecutive utterance fragments before sampling.",
+    )
     parser.add_argument("--seed", default=42, type=int)
     args = parser.parse_args()
 
@@ -148,6 +155,11 @@ def main() -> None:
     for file_path in input_files:
         bundle = json.loads(file_path.read_text())
         bundle["annotated_corpus"] = bundle.get("annotated_corpus") or bundle.get("corpus", [])
+        merge_stats = None
+        if not args.keep_utterance_fragments:
+            bundle["annotated_corpus"], merge_stats = merge_consecutive_utterances(
+                bundle["annotated_corpus"]
+            )
         team_samples = [
             sample
             for idx in range(len(bundle["annotated_corpus"]))
@@ -157,7 +169,12 @@ def main() -> None:
         if args.max_samples_per_team > 0:
             team_samples = team_samples[: args.max_samples_per_team]
         all_samples.extend(team_samples)
-        print(f"{file_path.name}: {len(team_samples)} samples")
+        merge_summary = (
+            f", merged {merge_stats['merged_fragments']} fragments"
+            if merge_stats is not None
+            else ""
+        )
+        print(f"{file_path.name}: {len(team_samples)} samples{merge_summary}")
 
     splits, split_teams = split_samples(all_samples, args.seed)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -175,6 +192,7 @@ def main() -> None:
         "input_dir": str(args.input_dir),
         "context_window": args.context_window,
         "max_samples_per_team": args.max_samples_per_team,
+        "merge_consecutive_utterances": not args.keep_utterance_fragments,
         "seed": args.seed,
         "total_samples": len(all_samples),
         "splits": {name: len(rows) for name, rows in splits.items()},
