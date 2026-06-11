@@ -145,6 +145,7 @@ def main() -> None:
 
     rng = random.Random(args.seed)
     all_samples: list[dict] = []
+    total_merged_fragments = 0
 
     input_files = sorted(args.input_dir.rglob("team_*_bundle_atc21s_full.json"))
     if not input_files:
@@ -160,6 +161,7 @@ def main() -> None:
             bundle["annotated_corpus"], merge_stats = merge_consecutive_utterances(
                 bundle["annotated_corpus"]
             )
+            total_merged_fragments += merge_stats["merged_fragments"]
         team_samples = [
             sample
             for idx in range(len(bundle["annotated_corpus"]))
@@ -193,6 +195,7 @@ def main() -> None:
         "context_window": args.context_window,
         "max_samples_per_team": args.max_samples_per_team,
         "merge_consecutive_utterances": not args.keep_utterance_fragments,
+        "merged_fragments": total_merged_fragments,
         "seed": args.seed,
         "total_samples": len(all_samples),
         "splits": {name: len(rows) for name, rows in splits.items()},
