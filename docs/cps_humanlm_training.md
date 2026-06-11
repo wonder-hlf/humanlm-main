@@ -48,6 +48,12 @@ val:   1 team
 test:  1 team
 ```
 
+The SFT prompt only uses information available up to the target utterance:
+participant identity plus prior dialogue/action events. It deliberately excludes
+`learning_features` such as `RLG`, task-level outcomes, attempt outcomes, and
+other statistics computed after the target utterance, because those would leak
+future information into training.
+
 ## 2. Push Code to GitHub
 
 The `data/` directory is ignored by Git because it contains derived human data.

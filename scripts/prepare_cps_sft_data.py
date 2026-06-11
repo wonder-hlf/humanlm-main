@@ -10,7 +10,10 @@ from pathlib import Path
 
 import pandas as pd
 
-from merge_cps_consecutive_utterances import merge_consecutive_utterances
+try:
+    from .merge_cps_consecutive_utterances import merge_consecutive_utterances
+except ImportError:
+    from merge_cps_consecutive_utterances import merge_consecutive_utterances
 
 
 SYSTEM_PROMPT = """You are simulating a real human participant in a collaborative problem-solving task.
@@ -35,27 +38,13 @@ def event_to_text(event: dict) -> str:
     return f"{prefix} {verb}: {obj}"
 
 
-def make_persona(team_no: int, participant: str, bundle: dict) -> str:
-    learning = bundle.get("learning_features", {})
-    log_features = bundle.get("log_features", {})
-    participant_prefix = f"{participant}_"
-
-    participant_features = {
-        key[len(participant_prefix) :]: value
-        for key, value in {**log_features, **learning}.items()
-        if key.startswith(participant_prefix)
-    }
-
-    lines = [
+def make_persona(team_no: int, participant: str) -> str:
+    return "\n".join([
         f"Team: {team_no}",
         f"Participant: {participant}",
         "Role: A human collaborator in a two-person team task.",
         "Communication style: infer from the dialogue history and continue consistently.",
-    ]
-    if participant_features:
-        compact = ", ".join(f"{k}={v}" for k, v in sorted(participant_features.items()))
-        lines.append(f"Observed participant features: {compact}")
-    return "\n".join(lines)
+    ])
 
 
 def make_sample(bundle: dict, idx: int, context_window: int) -> dict | None:
@@ -89,7 +78,7 @@ def make_sample(bundle: dict, idx: int, context_window: int) -> dict | None:
                 "role": "system",
                 "name": "",
                 "content": SYSTEM_PROMPT.format(
-                    persona=make_persona(int(team_no), str(target), bundle)
+                    persona=make_persona(int(team_no), str(target))
                 ),
             },
             {"role": "user", "name": "", "content": user_content},
