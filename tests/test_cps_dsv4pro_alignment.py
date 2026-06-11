@@ -3,6 +3,7 @@ import unittest
 from scripts.run_cps_dsv4pro_alignment import (
     judge_messages,
     qwen_rollout_messages,
+    sample_key,
     validate_judge_output,
     validate_qwen_rollout,
 )
@@ -79,6 +80,17 @@ class CpsDsv4ProAlignmentTest(unittest.TestCase):
         validate_judge_output(valid)
         with self.assertRaises(ValueError):
             validate_judge_output({"dimension_scores": {}, "overall_state_alignment": 2})
+
+    def test_sample_key_identifies_one_human_target(self):
+        sample = {
+            "team_no": 2,
+            "participant": "B",
+            "attempt_no": 3,
+            "turn_no": 4,
+            "source_index": 5,
+        }
+
+        self.assertEqual(sample_key(sample), "2:B:3:4:5")
 
 
 if __name__ == "__main__":
