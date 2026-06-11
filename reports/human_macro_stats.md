@@ -22,6 +22,19 @@ Repair-after-mismatch uses a window of 10 subsequent events.
 
 Progress values are normalized event positions from 0 (task start) to 1 (task end).
 
+These are team-trajectory statistics across 10 distinct pairs. They do not represent an average individual student.
+
+## Participant-Level Descriptive Statistics
+
+Computed from 20 distinct participants. Because each participant appears in only one pair, these values describe the observed sample and do not isolate individual effects from partner effects.
+
+| Metric | Mean | Median | Stdev | Min | Max |
+|---|---:|---:|---:|---:|---:|
+| Participant turn count | 55.4000 | 49.0000 | 23.6407 | 28 | 113 |
+| Participant utterance count | 239.3500 | 259.5000 | 88.3768 | 80 | 413 |
+| Participant edit count | 52.6500 | 46.5000 | 22.0771 | 30 | 107 |
+| Participant match-to-mismatch ratio | 2.8495 | 2.3750 | 2.1738 | 0.2500 | 9.5000 |
+
 ## Additional Metrics
 
 - Action counts: `{"edit_add": 904, "submit": 338, "edit_remove": 115, "press": 151, "check": 405, "edit_load": 34}`

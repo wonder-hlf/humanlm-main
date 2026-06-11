@@ -28,6 +28,22 @@ CONTINUATION_STARTERS = {
     "which",
     "with",
 }
+INCOMPLETE_ENDERS = {
+    "and",
+    "at",
+    "because",
+    "but",
+    "for",
+    "from",
+    "in",
+    "of",
+    "on",
+    "or",
+    "than",
+    "then",
+    "to",
+    "with",
+}
 
 
 def is_speech(event: dict) -> bool:
@@ -40,7 +56,19 @@ def join_utterances(parts: list[str]) -> str:
 
 def is_continuation_fragment(text: str) -> bool:
     words = text.strip().lower().split()
-    return bool(words) and len(words) <= 8 and words[0].strip(".,!?") in CONTINUATION_STARTERS
+    return bool(words) and len(words) <= 5 and words[0].strip(".,!?") in CONTINUATION_STARTERS
+
+
+def is_incomplete_utterance(text: str) -> bool:
+    stripped = text.strip().lower()
+    words = stripped.split()
+    if not words:
+        return False
+    final_word = words[-1].strip(".,!?")
+    return (
+        final_word in INCOMPLETE_ENDERS
+        or stripped[-1] not in ".!?"
+    )
 
 
 def merge_consecutive_utterances(events: list[dict]) -> tuple[list[dict], dict[str, int]]:
@@ -49,7 +77,6 @@ def merge_consecutive_utterances(events: list[dict]) -> tuple[list[dict], dict[s
     merged_fragments = 0
     merged_groups = 0
     current_turn: tuple[object, object] | None = None
-    last_human_speaker: str | None = None
     last_speech_index: dict[str, int] = {}
 
     for original_event in events:
@@ -57,7 +84,6 @@ def merge_consecutive_utterances(events: list[dict]) -> tuple[list[dict], dict[s
         turn = (event.get("attempt_no"), event.get("turn_no"))
         if turn != current_turn:
             current_turn = turn
-            last_human_speaker = None
             last_speech_index.clear()
 
         speaker = event.get("subject")
@@ -66,17 +92,25 @@ def merge_consecutive_utterances(events: list[dict]) -> tuple[list[dict], dict[s
             continue
         if speaker not in HUMAN_PARTICIPANTS:
             merged_events.append(event)
-            last_human_speaker = None
             last_speech_index.clear()
             continue
 
         text = str(event.get("object", "")).strip()
         previous_index = last_speech_index.get(str(speaker))
+        previous_text = (
+            str(merged_events[previous_index].get("object", ""))
+            if previous_index is not None
+            else ""
+        )
         should_merge = previous_index is not None and (
-            last_human_speaker == speaker or is_continuation_fragment(text)
+            is_continuation_fragment(text) or is_incomplete_utterance(previous_text)
         )
         if should_merge:
             previous = merged_events[previous_index]
+            previous.setdefault(
+                "merged_utterance_parts",
+                [str(previous.get("object", "")).strip()],
+            ).append(text)
             previous["object"] = join_utterances(
                 [str(previous.get("object", "")), text]
             )
@@ -87,10 +121,9 @@ def merge_consecutive_utterances(events: list[dict]) -> tuple[list[dict], dict[s
                 merged_groups += 1
         else:
             event["merged_utterance_count"] = 1
+            event["merged_utterance_parts"] = [text]
             merged_events.append(event)
             last_speech_index[str(speaker)] = len(merged_events) - 1
-
-        last_human_speaker = str(speaker)
 
     return merged_events, {
         "input_events": len(events),
@@ -112,6 +145,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--input-dir", required=True, type=Path)
     parser.add_argument("--output-dir", required=True, type=Path)
+    parser.add_argument("--audit-output", type=Path)
     args = parser.parse_args()
 
     input_files = sorted(args.input_dir.rglob("team_*_bundle_atc21s_full.json"))
@@ -122,6 +156,7 @@ def main() -> None:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     totals = {"input_events": 0, "output_events": 0, "merged_groups": 0, "merged_fragments": 0}
+    audit_rows = []
 
     for input_path in input_files:
         merged_bundle, stats = merge_bundle(json.loads(input_path.read_text()))
@@ -129,6 +164,19 @@ def main() -> None:
         output_path.write_text(
             json.dumps(merged_bundle, ensure_ascii=False, indent=2),
             encoding="utf-8",
+        )
+        source_key = "annotated_corpus" if merged_bundle.get("annotated_corpus") else "corpus"
+        audit_rows.extend(
+            {
+                "team_no": merged_bundle.get("team_no"),
+                "attempt_no": event.get("attempt_no"),
+                "turn_no": event.get("turn_no"),
+                "subject": event.get("subject"),
+                "merged_utterance_parts": event.get("merged_utterance_parts"),
+                "merged_utterance": event.get("object"),
+            }
+            for event in merged_bundle[source_key]
+            if event.get("merged_utterance_count", 1) > 1
         )
         for key in totals:
             totals[key] += stats[key]
@@ -142,6 +190,13 @@ def main() -> None:
         f"{totals['merged_fragments']} fragments merged, "
         f"{totals['input_events']} -> {totals['output_events']} events"
     )
+    if args.audit_output:
+        args.audit_output.parent.mkdir(parents=True, exist_ok=True)
+        args.audit_output.write_text(
+            "".join(json.dumps(row, ensure_ascii=False) + "\n" for row in audit_rows),
+            encoding="utf-8",
+        )
+        print(f"Audit: {len(audit_rows)} rows -> {args.audit_output}")
 
 
 if __name__ == "__main__":

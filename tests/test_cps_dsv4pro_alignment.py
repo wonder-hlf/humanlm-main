@@ -3,6 +3,7 @@ import unittest
 from scripts.run_cps_dsv4pro_alignment import (
     judge_messages,
     qwen_rollout_messages,
+    validate_judge_output,
     validate_qwen_rollout,
 )
 
@@ -31,13 +32,13 @@ class CpsDsv4ProAlignmentTest(unittest.TestCase):
         rollout = {
             "latent_states": {"goal": "add an edge"},
             "utterance": "let us add it",
-            "optional_action": None,
+            "action_intent": None,
         }
         text = str(judge_messages(self.sample, rollout))
 
         self.assertIn("add it", text)
         self.assertIn("add an edge", text)
-        self.assertIn("only a judge", text)
+        self.assertIn("only a state-alignment judge", text)
 
     def test_qwen_rollout_requires_all_six_states_and_response(self):
         valid = {
@@ -50,12 +51,34 @@ class CpsDsv4ProAlignmentTest(unittest.TestCase):
                 "communication": "instruction",
             },
             "utterance": "add that edge",
-            "optional_action": {"type": "edit_add", "object": "(1-2)"},
+            "action_intent": {"type": "add_track", "track": ["Bern", "Zurich"]},
         }
 
         validate_qwen_rollout(valid)
         with self.assertRaises(ValueError):
             validate_qwen_rollout({"latent_states": {"goal": "add edge"}, "utterance": "go"})
+
+    def test_judge_requires_scores_missing_and_unsupported_states(self):
+        valid = {
+            "dimension_scores": {
+                key: {"score": 0.5, "rationale": "partly supported"}
+                for key in (
+                    "task_understanding",
+                    "strategy_goal",
+                    "collaboration_value",
+                    "interaction_stance",
+                    "error_repair_state",
+                    "communication_style",
+                )
+            },
+            "overall_state_alignment": 0.5,
+            "missing_state": ["cost uncertainty"],
+            "redundant_unsupported_state": [],
+        }
+
+        validate_judge_output(valid)
+        with self.assertRaises(ValueError):
+            validate_judge_output({"dimension_scores": {}, "overall_state_alignment": 2})
 
 
 if __name__ == "__main__":

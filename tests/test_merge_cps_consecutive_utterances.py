@@ -14,18 +14,33 @@ def event(subject, verb, text, attempt=1, turn=1):
 
 
 class MergeConsecutiveUtterancesTest(unittest.TestCase):
-    def test_merges_directly_consecutive_speech(self):
+    def test_merges_directly_consecutive_incomplete_speech(self):
         merged, stats = merge_consecutive_utterances(
             [
-                event("A", "says", "go to mount bern ."),
-                event("A", "says", "then mount basel ."),
+                event("A", "says", "go to mount bern and then"),
+                event("A", "says", "mount basel ."),
             ]
         )
 
         self.assertEqual([row["object"] for row in merged], [
-            "go to mount bern . then mount basel ."
+            "go to mount bern and then mount basel ."
         ])
         self.assertEqual(stats["merged_fragments"], 1)
+        self.assertEqual(
+            merged[0]["merged_utterance_parts"],
+            ["go to mount bern and then", "mount basel ."],
+        )
+
+    def test_does_not_merge_complete_consecutive_speech(self):
+        merged, stats = merge_consecutive_utterances(
+            [
+                event("A", "says", "okay ."),
+                event("A", "says", "i am doing this ."),
+            ]
+        )
+
+        self.assertEqual(len(merged), 2)
+        self.assertEqual(stats["merged_fragments"], 0)
 
     def test_merges_short_continuation_after_interjection(self):
         merged, _ = merge_consecutive_utterances(
@@ -55,6 +70,16 @@ class MergeConsecutiveUtterancesTest(unittest.TestCase):
             "four .",
             "yes that works .",
         ])
+
+    def test_does_not_merge_complete_sentence_starting_with_then(self):
+        merged, _ = merge_consecutive_utterances(
+            [
+                event("B", "says", "yeah i do ."),
+                event("B", "says", "then you see what i did ?"),
+            ]
+        )
+
+        self.assertEqual(len(merged), 2)
 
     def test_new_task_turn_ends_merge(self):
         merged, _ = merge_consecutive_utterances(

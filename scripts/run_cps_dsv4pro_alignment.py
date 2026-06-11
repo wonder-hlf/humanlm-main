@@ -13,7 +13,18 @@ from pathlib import Path
 
 
 STATE_KEYS = {"belief", "goal", "value", "stance", "emotion", "communication"}
-ACTION_TYPES = {"edit_add", "edit_remove", "edit_load", "check", "submit", "press"}
+JUDGE_DIMENSION_KEYS = {
+    "task_understanding",
+    "strategy_goal",
+    "collaboration_value",
+    "interaction_stance",
+    "error_repair_state",
+    "communication_style",
+}
+ACTION_TYPES = {"add_track", "remove_track", "load_solution", "check", "submit", "press"}
+ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_GENERATION_PROMPT = ROOT / "prompts/state_generation_prompt.md"
+DEFAULT_JUDGE_PROMPT = ROOT / "prompts/state_judge_prompt.md"
 
 
 def load_jsonl(path: Path) -> list[dict]:
@@ -38,11 +49,29 @@ def validate_qwen_rollout(rollout: dict) -> None:
         raise ValueError("Every Qwen latent state must be a non-empty string.")
     if not isinstance(rollout.get("utterance"), str) or not rollout["utterance"].strip():
         raise ValueError("Qwen rollout utterance must be a non-empty string.")
-    action = rollout.get("optional_action")
+    action = rollout.get("action_intent")
     if action is not None and (
         not isinstance(action, dict) or action.get("type") not in ACTION_TYPES
     ):
-        raise ValueError(f"Qwen optional_action must be null or one of: {ACTION_TYPES}")
+        raise ValueError(f"Qwen action_intent must be null or one of: {ACTION_TYPES}")
+
+
+def validate_judge_output(judgment: dict) -> None:
+    scores = judgment.get("dimension_scores")
+    if not isinstance(scores, dict) or set(scores) != JUDGE_DIMENSION_KEYS:
+        raise ValueError(
+            f"Judge output must contain exactly these dimension_scores: {JUDGE_DIMENSION_KEYS}"
+        )
+    for value in scores.values():
+        score = value.get("score") if isinstance(value, dict) else None
+        if not isinstance(score, (int, float)) or not 0 <= score <= 1:
+            raise ValueError("Every judge dimension score must be between 0 and 1.")
+    overall = judgment.get("overall_state_alignment")
+    if not isinstance(overall, (int, float)) or not 0 <= overall <= 1:
+        raise ValueError("Judge overall_state_alignment must be between 0 and 1.")
+    for key in ("missing_state", "redundant_unsupported_state"):
+        if not isinstance(judgment.get(key), list):
+            raise ValueError(f"Judge output must contain list field: {key}")
 
 
 def call_chat_completion(
@@ -85,30 +114,21 @@ def context_payload(sample: dict) -> dict:
         "environment_state": sample["environment_state"],
         "dialogue_and_action_history": sample["dialogue_and_action_history"],
         "state_dimensions": sample["state_dimensions"],
+        "optional_steering_config": sample.get("optional_steering_config"),
     }
 
 
-def qwen_rollout_messages(sample: dict) -> list[dict]:
+def qwen_rollout_messages(sample: dict, prompt: str | None = None) -> list[dict]:
     return [
         {
             "role": "system",
-            "content": (
-                "You are the target student in a JUSThink collaborative task. Using "
-                "only the provided prefix context, first infer your six latent CPS "
-                "states, then produce your next utterance and optional task action. "
-                "Never use or predict final task outcomes. Return JSON with this "
-                "schema: {\"latent_states\":{\"belief\":\"...\",\"goal\":\"...\","
-                "\"value\":\"...\",\"stance\":\"...\",\"emotion\":\"...\","
-                "\"communication\":\"...\"},\"utterance\":\"...\","
-                "\"optional_action\":null or {\"type\":\"edit_add|edit_remove|"
-                "edit_load|check|submit|press\",\"object\":\"...\"}}."
-            ),
+            "content": prompt or DEFAULT_GENERATION_PROMPT.read_text(encoding="utf-8"),
         },
         {"role": "user", "content": json.dumps(context_payload(sample), ensure_ascii=False)},
     ]
 
 
-def judge_messages(sample: dict, qwen_rollout: dict) -> list[dict]:
+def judge_messages(sample: dict, qwen_rollout: dict, prompt: str | None = None) -> list[dict]:
     payload = context_payload(sample)
     payload["ground_truth"] = sample["ground_truth"]
     payload["qwen_rollout"] = qwen_rollout
@@ -116,16 +136,7 @@ def judge_messages(sample: dict, qwen_rollout: dict) -> list[dict]:
     return [
         {
             "role": "system",
-            "content": (
-                "You are only a judge. Do not generate or rewrite latent states, "
-                "utterances, or actions. Judge how well Qwen's generated latent states "
-                "align with the human's ground-truth next utterance and nearby action. "
-                "Return JSON with dimension_scores keyed by task_understanding, "
-                "strategy_goal, collaboration_value, interaction_stance, "
-                "error_repair_state, communication_style; each value must contain "
-                "score (0 to 1) and rationale. Also return overall_state_alignment "
-                "(0 to 1). Do not reward claims that rely on future information."
-            ),
+            "content": prompt or DEFAULT_JUDGE_PROMPT.read_text(encoding="utf-8"),
         },
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
@@ -138,6 +149,8 @@ def main() -> None:
     parser.add_argument("--limit", default=0, type=int)
     parser.add_argument("--timeout", default=180, type=int)
     parser.add_argument("--sleep-seconds", default=0.5, type=float)
+    parser.add_argument("--generation-prompt", default=DEFAULT_GENERATION_PROMPT, type=Path)
+    parser.add_argument("--judge-prompt", default=DEFAULT_JUDGE_PROMPT, type=Path)
     args = parser.parse_args()
 
     qwen_api_key = os.environ.get("QWEN_API_KEY", "EMPTY")
@@ -164,6 +177,8 @@ def main() -> None:
     if args.limit > 0:
         rows = rows[: args.limit]
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    generation_prompt = args.generation_prompt.read_text(encoding="utf-8")
+    judge_prompt = args.judge_prompt.read_text(encoding="utf-8")
 
     with args.output.open("w", encoding="utf-8") as output:
         for index, sample in enumerate(rows, start=1):
@@ -172,7 +187,7 @@ def main() -> None:
                     base_url=str(qwen_base_url),
                     api_key=str(qwen_api_key),
                     model=str(qwen_model),
-                    messages=qwen_rollout_messages(sample),
+                    messages=qwen_rollout_messages(sample, generation_prompt),
                     timeout=args.timeout,
                 )
                 validate_qwen_rollout(qwen_rollout)
@@ -180,9 +195,10 @@ def main() -> None:
                     base_url=str(judge_base_url),
                     api_key=str(judge_api_key),
                     model=str(judge_model),
-                    messages=judge_messages(sample, qwen_rollout),
+                    messages=judge_messages(sample, qwen_rollout, judge_prompt),
                     timeout=args.timeout,
                 )
+                validate_judge_output(alignment)
                 result = {
                     "team_no": sample["team_no"],
                     "participant": sample["participant"],

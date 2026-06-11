@@ -25,6 +25,37 @@ def first_index(values: list[str | None], targets: set[str]) -> int | None:
     return next((idx for idx, value in enumerate(values) if value in targets), None)
 
 
+def summarize_participant(events: list[dict], team_no: int, participant: str) -> dict:
+    participant_events = [event for event in events if event.get("subject") == participant]
+    actions = Counter(action_type(event) for event in participant_events if action_type(event))
+    alignments = Counter(
+        matching_label(event) for event in participant_events if matching_label(event)
+    )
+    discourse = Counter(
+        discourse_type(event) for event in participant_events if discourse_type(event)
+    )
+    turns = {
+        (event.get("attempt_no"), event.get("turn_no"))
+        for event in participant_events
+        if event.get("turn_no") is not None
+    }
+    return {
+        "team_no": team_no,
+        "participant": participant,
+        "turn_count": len(turns),
+        "utterance_count": sum(event.get("verb") == "says" for event in participant_events),
+        "edit_count": sum(actions.get(key, 0) for key in ("edit_add", "edit_remove", "edit_load")),
+        "action_counts": dict(actions),
+        "alignment_counts": dict(alignments),
+        "match_to_mismatch_ratio": (
+            round(alignments["match"] / alignments["mismatch"], 4)
+            if alignments["mismatch"]
+            else None
+        ),
+        "discourse_counts": dict(discourse),
+    }
+
+
 def summarize_bundle(bundle: dict, repair_window: int) -> dict:
     events = attach_submit_results(bundle["annotated_corpus"], bundle["corpus"])
     action_codes = [action_type(event) for event in events]
@@ -63,6 +94,10 @@ def summarize_bundle(bundle: dict, repair_window: int) -> dict:
 
     return {
         "team_no": int(bundle["team_no"]),
+        "participants": [
+            summarize_participant(events, int(bundle["team_no"]), participant)
+            for participant in ("A", "B")
+        ],
         "task_performance": {
             "submission_count": len(submit_results),
             "best_cost_gap": min(gaps) if gaps else None,
@@ -166,6 +201,34 @@ def aggregate(team_rows: list[dict]) -> dict:
         "action_counts": dict(action_counts),
         "discourse_counts": dict(discourse_counts),
         "transition_counts": dict(transitions),
+        "participant_summary": aggregate_participants(
+            [participant for row in team_rows for participant in row["participants"]]
+        ),
+    }
+
+
+def aggregate_participants(participants: list[dict]) -> dict:
+    def describe(values: list[float]) -> dict:
+        return {
+            "count": len(values),
+            "mean": round(statistics.mean(values), 4) if values else None,
+            "median": round(statistics.median(values), 4) if values else None,
+            "stdev": round(statistics.stdev(values), 4) if len(values) > 1 else None,
+            "min": min(values) if values else None,
+            "max": max(values) if values else None,
+        }
+
+    ratios = [
+        row["match_to_mismatch_ratio"]
+        for row in participants
+        if row["match_to_mismatch_ratio"] is not None
+    ]
+    return {
+        "participant_count": len(participants),
+        "turn_count": describe([row["turn_count"] for row in participants]),
+        "utterance_count": describe([row["utterance_count"] for row in participants]),
+        "edit_count": describe([row["edit_count"] for row in participants]),
+        "match_to_mismatch_ratio": describe(ratios),
     }
 
 

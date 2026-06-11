@@ -20,6 +20,25 @@ inputs. The JSON bundles do not reliably expose current cost-view/edit-view
 assignment, so the pipeline records this limitation instead of inventing a
 role.
 
+For manual verification of the utterance-fragment merge, generate and inspect
+the full merged bundles:
+
+```bash
+python scripts/merge_cps_consecutive_utterances.py \
+  --input-dir /path/to/team_bundles_atc21s_full \
+  --output-dir local_data/team_bundles_atc21s_merged \
+  --audit-output local_data/team_bundles_atc21s_merge_audit.jsonl
+```
+
+The relative path is `local_data/team_bundles_atc21s_merged/`. These full
+merged JSON files are the best artifact for manually checking whether fragments
+were joined correctly. Inspect `annotated_corpus` events whose
+`merged_utterance_count` is greater than one; `merged_utterance_parts` preserves
+the original fragments for comparison. For the fastest review, inspect
+`local_data/team_bundles_atc21s_merge_audit.jsonl`, which contains only merged
+groups. The sampled state-first data is separately written to
+`data/cps_humanlm/v1/20p/`.
+
 Build a small HumanLM-style dataset:
 
 ```bash
@@ -61,10 +80,26 @@ python scripts/run_cps_dsv4pro_alignment.py \
 ```
 
 Both endpoints must provide an OpenAI-compatible `/chat/completions` API. The
-script first asks Qwen for `latent_states + utterance + optional_action`, then
+script first asks Qwen for `latent_states + utterance + action_intent`, then
 passes that rollout and the human ground truth to DSV4Pro for scoring. DSV4Pro
 is never asked to generate latent states or a response. Do not commit API keys
 or alignment outputs containing human data.
+
+State-first generation and judge prompts are versioned at:
+
+```text
+prompts/state_generation_prompt.md
+prompts/state_judge_prompt.md
+```
+
+Summarize completed judge outputs:
+
+```bash
+python analysis/state_alignment_eval.py \
+  --input data/cps_humanlm/v1/20p/train.dsv4pro_alignment.jsonl \
+  --output-json data/cps_humanlm/v1/20p/state_alignment_summary.json \
+  --output-md reports/state_alignment_summary.md
+```
 
 Compute hard proxy and macro human-trajectory baselines:
 

@@ -79,6 +79,7 @@ def make_sample(bundle: dict, events: list[dict], idx: int, context_window: int)
         "environment_state": prefix_environment_state(prefix),
         "dialogue_and_action_history": [serialize_event(event) for event in history],
         "state_dimensions": CPS_STATE_DIMENSIONS,
+        "optional_steering_config": None,
         "ground_truth": {
             "utterance": utterance,
             "actions_before_next_human_utterance": actions,
@@ -95,7 +96,7 @@ def make_sample(bundle: dict, events: list[dict], idx: int, context_window: int)
             "required_output": {
                 "latent_states": list(CPS_STATE_DIMENSIONS),
                 "utterance": "string",
-                "optional_action": "null or task action object",
+                "action_intent": "null or task action intent object",
             },
             "ground_truth_visible_to_qwen": False,
         },
@@ -118,6 +119,8 @@ def make_sample(bundle: dict, events: list[dict], idx: int, context_window: int)
                     for dimension in CPS_STATE_DIMENSIONS.values()
                 },
                 "overall_state_alignment": "0-1",
+                "missing_state": "list of strings",
+                "redundant_unsupported_state": "list of strings",
             },
         },
     }

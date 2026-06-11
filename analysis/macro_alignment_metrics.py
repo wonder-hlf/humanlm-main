@@ -115,6 +115,7 @@ def metric_table(aggregate_row: dict) -> list[str]:
 
 def human_report(result: dict, repair_window: int) -> str:
     aggregate_row = result["aggregate"]
+    participant = aggregate_row["participant_summary"]
     lines = [
         "# Human Macro Statistics",
         "",
@@ -127,18 +128,45 @@ def human_report(result: dict, repair_window: int) -> str:
         "",
         "Progress values are normalized event positions from 0 (task start) to 1 (task end).",
         "",
-        "## Additional Metrics",
+        "These are team-trajectory statistics across 10 distinct pairs. They do not "
+        "represent an average individual student.",
         "",
-        f"- Action counts: `{json.dumps(aggregate_row.get('action_counts', {}), ensure_ascii=False)}`",
-        f"- Discourse counts: `{json.dumps(aggregate_row.get('discourse_counts', {}), ensure_ascii=False)}`",
-        "- Additional retained signals: event count, utterance count, first edit progress, "
-        "cost-gap trajectory, found-optimal rate, check/press counts, and discourse categories.",
+        "## Participant-Level Descriptive Statistics",
         "",
-        "## Top Behavior Transitions",
+        f"Computed from {participant['participant_count']} distinct participants. "
+        "Because each participant appears in only one pair, these values describe the "
+        "observed sample and do not isolate individual effects from partner effects.",
         "",
-        "| Transition | Count |",
-        "|---|---:|",
+        "| Metric | Mean | Median | Stdev | Min | Max |",
+        "|---|---:|---:|---:|---:|---:|",
     ]
+    for key, label in (
+        ("turn_count", "Participant turn count"),
+        ("utterance_count", "Participant utterance count"),
+        ("edit_count", "Participant edit count"),
+        ("match_to_mismatch_ratio", "Participant match-to-mismatch ratio"),
+    ):
+        values = participant[key]
+        lines.append(
+            f"| {label} | {fmt(values['mean'])} | {fmt(values['median'])} | "
+            f"{fmt(values['stdev'])} | {fmt(values['min'])} | {fmt(values['max'])} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Additional Metrics",
+            "",
+            f"- Action counts: `{json.dumps(aggregate_row.get('action_counts', {}), ensure_ascii=False)}`",
+            f"- Discourse counts: `{json.dumps(aggregate_row.get('discourse_counts', {}), ensure_ascii=False)}`",
+            "- Additional retained signals: event count, utterance count, first edit progress, "
+            "cost-gap trajectory, found-optimal rate, check/press counts, and discourse categories.",
+            "",
+            "## Top Behavior Transitions",
+            "",
+            "| Transition | Count |",
+            "|---|---:|",
+        ]
+    )
     lines.extend(
         f"| `{transition}` | {count} |"
         for transition, count in top_transitions(aggregate_row["transition_counts"])
