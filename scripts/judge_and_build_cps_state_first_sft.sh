@@ -8,6 +8,7 @@ CANDIDATE_DIR="${CANDIDATE_DIR:-$REPO/outputs/cps_state_first_raw_candidates_bas
 ALIGNMENT_DIR="${ALIGNMENT_DIR:-$REPO/outputs/cps_state_first_candidates_base_qwen/20p}"
 OUTPUT_DIR="${OUTPUT_DIR:-$REPO/data/cps_state_first_sft_base_qwen/20p}"
 MINIMUM_SCORE="${MINIMUM_SCORE:-0.5}"
+SPLITS="${SPLITS:-train val test}"
 
 for variable in DSV4PRO_API_KEY DSV4PRO_BASE_URL DSV4PRO_MODEL; do
   if [ -z "${!variable:-}" ]; then
@@ -17,7 +18,7 @@ for variable in DSV4PRO_API_KEY DSV4PRO_BASE_URL DSV4PRO_MODEL; do
 done
 
 mkdir -p "$ALIGNMENT_DIR" "$OUTPUT_DIR"
-for split in train val test; do
+for split in $SPLITS; do
   python "$REPO/scripts/judge_cps_state_candidates.py" \
     --source "$SOURCE_DIR/$split.jsonl" \
     --candidates "$CANDIDATE_DIR/$split.jsonl" \
@@ -25,8 +26,10 @@ for split in train val test; do
     --append
 done
 
-python "$REPO/scripts/prepare_cps_state_first_sft.py" \
-  --source-dir "$SOURCE_DIR" \
-  --alignment-dir "$ALIGNMENT_DIR" \
-  --output-dir "$OUTPUT_DIR" \
-  --minimum-score "$MINIMUM_SCORE"
+if [ "$SPLITS" = "train val test" ]; then
+  python "$REPO/scripts/prepare_cps_state_first_sft.py" \
+    --source-dir "$SOURCE_DIR" \
+    --alignment-dir "$ALIGNMENT_DIR" \
+    --output-dir "$OUTPUT_DIR" \
+    --minimum-score "$MINIMUM_SCORE"
+fi

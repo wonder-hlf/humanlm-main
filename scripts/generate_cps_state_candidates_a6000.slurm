@@ -20,6 +20,7 @@ CANDIDATE_DIR="${CANDIDATE_DIR:-$REPO/outputs/cps_state_first_raw_candidates_bas
 QWEN_LOCAL_MODEL="${QWEN_LOCAL_MODEL:-$WORKSPACE_ROOT/qwen_models/qwen/Qwen3-8B}"
 CANDIDATES_PER_SAMPLE="${CANDIDATES_PER_SAMPLE:-3}"
 LIMIT="${LIMIT:-0}"
+SPLITS="${SPLITS:-train val test}"
 
 export PATH="$ENV_DIR/bin:$PATH"
 mkdir -p "$CANDIDATE_DIR"
@@ -29,7 +30,7 @@ echo "Qwen policy: $QWEN_LOCAL_MODEL"
 echo "Candidates per sample: $CANDIDATES_PER_SAMPLE"
 nvidia-smi
 
-for split in train val test; do
+for split in $SPLITS; do
   python "$REPO/scripts/run_cps_dsv4pro_alignment.py" \
     --input "$SOURCE_DIR/$split.jsonl" \
     --output "$CANDIDATE_DIR/$split.jsonl" \
